@@ -22,14 +22,24 @@ This script uploads a single file to Google Drive.
 from __future__ import print_function
 
 import os
+import os.path
+import io
+import six
 import googleapiclient.http
 import httplib2
 import oauth2client.client
-import six
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
 from storagedrive import StorageDrive
 from pathlib import Path
+from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+# If modifying these scopes, delete the file token.json.
+SCOPES = ['https://www.googleapis.com/auth/drive.metadata.readonly']
+# If modifying these scopes, delete the file token.json.
+SCOPES1 = ['https://www.googleapis.com/auth/drive.readonly']
 
 
 class GoogleDrive(StorageDrive):
@@ -84,3 +94,91 @@ class GoogleDrive(StorageDrive):
             # TODO(developer) - Handle errors from drive API.
             print(f'An error occurred: {error}')
 
+    def download(self, real_file_id):
+
+        creds = None
+        if os.path.exists('token.json'):
+            creds = Credentials.from_authorized_user_file('token.json', SCOPES1)
+        # If there are no (valid) credentials available, let the user log in.
+        if not creds or not creds.valid:
+            if False and creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    'credentials.json', SCOPES1)
+                creds = flow.run_local_server(port=0)
+            # Save the credentials for the next run
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
+
+        try:
+            service = build('drive', 'v3', credentials=creds)
+            file_id = real_file_id
+
+            # pylint: disable=maybe-no-member
+            request = service.files().get_media(fileId=file_id)
+            file = io.BytesIO()
+            downloader = googleapiclient.http.MediaIoBaseDownload(file, request, chunksize=1024*1024)
+            done = False
+            while done is False:
+                status, done = downloader.next_chunk()
+                print(F'Download {int(status.progress() * 100)}.')
+
+        except HttpError as error:
+            # TODO(developer) - Handle errors from drive API.
+            print(f'An error occurred: {error}')
+
+        return file.getvalue()
+
+    if __name__ == '__main__':
+        download(real_file_id='1FEu2J_quHbg2nyUYUhuxyI9AZyKARTsM')
+
+    def search(self):
+        """Search file in drive location
+
+        Load pre-authorized user credentials from the environment.
+        TODO(developer) - See https://developers.google.com/identity
+        for guides on implementing OAuth2 for the application.
+        """
+        if os.path.exists('token.json'):
+            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+            # If there are no (valid) credentials available, let the user log in.
+        if not creds or not creds.valid:
+            if False and creds and creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                flow = InstalledAppFlow.from_client_secrets_file(
+                    'credentials.json', SCOPES)
+                creds = flow.run_local_server(port=0)
+            # Save the credentials for the next run
+            with open('token.json', 'w') as token:
+                token.write(creds.to_json())
+
+        try:
+            # create drive api client
+            service = build('drive', 'v3', credentials=creds)
+            files = []
+            page_token = None
+            while True:
+                # pylint: disable=maybe-no-member
+                response = service.files().list(q="mimeType='image/jpeg'",
+                                                spaces='drive',
+                                                fields='nextPageToken, '
+                                                       'files(id, name)',
+                                                pageToken=page_token).execute()
+                for file in response.get('files', []):
+                    # Process change
+                    print(F'Found file: {file.get("name")}, {file.get("id")}')
+                files.extend(response.get('files', []))
+                page_token = response.get('nextPageToken', None)
+                if page_token is None:
+                    break
+
+        except HttpError as error:
+            print(F'An error occurred: {error}')
+            files = None
+
+        return files
+
+    if __name__ == '__main__':
+        search()

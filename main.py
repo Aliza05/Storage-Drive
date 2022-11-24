@@ -1,9 +1,11 @@
 from googledrive import GoogleDrive
 
-file = input("Enter file path: ")
+#file = input("Enter file path: ")
 driver = GoogleDrive()
-driver.upload(file)
-
+#driver.upload(file)
+#driver.search()
+file = input("Enter file id: ")
+driver.download(file)
 
 
 

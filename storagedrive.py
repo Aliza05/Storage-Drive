@@ -6,9 +6,11 @@ class StorageDrive(ABC):
     def upload(self):
         pass
 
+    @abstractmethod
     def download(self):
         pass
 
+    @abstractmethod
     def search(self):
         pass
 
